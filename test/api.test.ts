@@ -14,11 +14,24 @@ async function resetDb() {
   await db.delete(users);
 }
 
-async function login(email = "alice@test.com") {
+async function register(email = "alice@test.com") {
+  const res = await app.request("/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, name: email.split("@")[0], password: "password123" }),
+  });
+  assert.strictEqual(res.status, 201);
+  const cookie = res.headers.get("set-cookie");
+  assert.ok(cookie, "register should set a cookie");
+  const user = await res.json();
+  return { cookie: cookie as string, user };
+}
+
+async function login(email = "alice@test.com", password = "password123") {
   const res = await app.request("/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password }),
   });
   assert.strictEqual(res.status, 200);
   const cookie = res.headers.get("set-cookie");
@@ -41,32 +54,66 @@ describe("Blog API", () => {
   beforeEach(resetDb);
 
   describe("auth", () => {
-    it("login creates a new user", async () => {
-      const { user } = await login("new@test.com");
+    it("register creates a new user", async () => {
+      const { user } = await register("new@test.com");
       assert.ok(user.id);
       assert.strictEqual(user.email, "new@test.com");
+      assert.strictEqual(user.name, "new");
     });
 
-    it("login returns existing user on second login", async () => {
-      const { user: first } = await login("bob@test.com");
-      const { user: second } = await login("bob@test.com");
-      assert.strictEqual(first.id, second.id);
+    it("rejects duplicate email on register", async () => {
+      await register("dup@test.com");
+      const res = await app.request("/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: json({ email: "dup@test.com", name: "dup", password: "password123" }),
+      });
+      assert.strictEqual(res.status, 409);
+      const body = await res.json();
+      assert.strictEqual(body.error, "email already registered");
+    });
+
+    it("login with valid credentials", async () => {
+      const { user: registered } = await register("alice@test.com");
+      const { user: loggedIn } = await login("alice@test.com", "password123");
+      assert.strictEqual(loggedIn.id, registered.id);
+      assert.strictEqual(loggedIn.email, registered.email);
+    });
+
+    it("login with wrong password returns 401", async () => {
+      await register("alice@test.com");
+      const res = await app.request("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: json({ email: "alice@test.com", password: "wrongpassword" }),
+      });
+      assert.strictEqual(res.status, 401);
+      const body = await res.json();
+      assert.strictEqual(body.error, "invalid credentials");
+    });
+
+    it("login with unknown email returns 401", async () => {
+      const res = await app.request("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: json({ email: "nobody@test.com", password: "password123" }),
+      });
+      assert.strictEqual(res.status, 401);
+      const body = await res.json();
+      assert.strictEqual(body.error, "invalid credentials");
     });
 
     it("rejects unauthenticated logout", async () => {
-      // logout is auth-required: a client with no session has nothing to log out from
       const res = await app.request("/auth/logout", { method: "POST" });
       assert.strictEqual(res.status, 401);
     });
 
     it("logout destroys session", async () => {
-      const { cookie } = await login();
+      const { cookie } = await register();
       const res = await authed("/auth/logout", { method: "POST", cookie });
       assert.strictEqual(res.status, 204);
       assert.ok(res.headers.get("set-cookie"), "logout should expire the cookie");
 
-      // Stateless session: destroy() sets an expired cookie — a browser stops
-      // sending it. Without the cookie, protected routes must 401.
       const after = await app.request("/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -75,8 +122,8 @@ describe("Blog API", () => {
       assert.strictEqual(after.status, 401);
     });
 
-    it("rejects missing email", async () => {
-      const res = await app.request("/auth/login", {
+    it("rejects missing fields on register", async () => {
+      const res = await app.request("/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: json({}),
@@ -84,8 +131,17 @@ describe("Blog API", () => {
       assert.strictEqual(res.status, 400);
     });
 
+    it("rejects short password on register", async () => {
+      const res = await app.request("/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: json({ email: "a@b.com", name: "a", password: "1234567" }),
+      });
+      assert.strictEqual(res.status, 400);
+    });
+
     it("returns current user from /me", async () => {
-      const { cookie, user } = await login();
+      const { cookie, user } = await register();
       const res = await authed("/me", { method: "GET", cookie });
       assert.strictEqual(res.status, 200);
       const body = await res.json();
@@ -101,7 +157,7 @@ describe("Blog API", () => {
 
   describe("posts", () => {
     it("creates and lists posts", async () => {
-      const { cookie, user } = await login();
+      const { cookie, user } = await register();
       const createRes = await authed("/posts", {
         method: "POST",
         cookie,
@@ -120,8 +176,8 @@ describe("Blog API", () => {
     });
 
     it("filters posts by authorId", async () => {
-      const { cookie: a } = await login("a@x.com");
-      const { cookie: b } = await login("b@x.com");
+      const { cookie: a, user: userA } = await register("a@x.com");
+      const { cookie: b } = await register("b@x.com");
 
       await authed("/posts", {
         method: "POST",
@@ -136,14 +192,14 @@ describe("Blog API", () => {
         body: json({ title: "B's post", content: "x" }),
       });
 
-      const resA = await app.request(`/posts?authorId=${(await login("a@x.com")).user.id}`);
+      const resA = await app.request(`/posts?authorId=${userA.id}`);
       const aPosts = await resA.json();
       assert.strictEqual(aPosts.length, 1);
       assert.strictEqual(aPosts[0].title, "A's post");
     });
 
     it("gets a post by id", async () => {
-      const { cookie } = await login();
+      const { cookie } = await register();
       const createRes = await authed("/posts", {
         method: "POST",
         cookie,
@@ -159,7 +215,7 @@ describe("Blog API", () => {
     });
 
     it("updates own post", async () => {
-      const { cookie } = await login();
+      const { cookie } = await register();
       const createRes = await authed("/posts", {
         method: "POST",
         cookie,
@@ -181,7 +237,7 @@ describe("Blog API", () => {
     });
 
     it("forbids updating another user's post", async () => {
-      const { cookie: alice } = await login("alice@test.com");
+      const { cookie: alice } = await register("alice@test.com");
       const createRes = await authed("/posts", {
         method: "POST",
         cookie: alice,
@@ -190,7 +246,7 @@ describe("Blog API", () => {
       });
       const { id } = await createRes.json();
 
-      const { cookie: bob } = await login("bob@test.com");
+      const { cookie: bob } = await register("bob@test.com");
       const updateRes = await authed(`/posts/${id}`, {
         method: "PUT",
         cookie: bob,
@@ -201,7 +257,7 @@ describe("Blog API", () => {
     });
 
     it("deletes own post", async () => {
-      const { cookie } = await login();
+      const { cookie } = await register();
       const createRes = await authed("/posts", {
         method: "POST",
         cookie,
@@ -225,7 +281,7 @@ describe("Blog API", () => {
 
   describe("comments", () => {
     it("creates and lists comments on a post", async () => {
-      const { cookie } = await login();
+      const { cookie } = await register();
       const createPostRes = await authed("/posts", {
         method: "POST",
         cookie,
@@ -252,7 +308,7 @@ describe("Blog API", () => {
     });
 
     it("returns 404 for comments on missing post", async () => {
-      const { cookie } = await login();
+      const { cookie } = await register();
       const res = await authed("/posts/nonexistent/comments", {
         method: "POST",
         cookie,
@@ -306,6 +362,7 @@ describe("Blog API", () => {
       assert.ok(spec.paths["/posts"]);
       assert.ok(spec.paths["/posts/{id}"]);
       assert.ok(spec.paths["/posts/{id}/comments"]);
+      assert.ok(spec.paths["/auth/register"], "register route is documented");
       assert.ok(spec.paths["/auth/login"], "login route is documented");
       assert.ok(spec.paths["/auth/logout"], "logout route is documented");
       assert.ok(spec.paths["/me"], "me route is documented");

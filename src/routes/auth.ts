@@ -1,9 +1,12 @@
 import { type } from "arktype";
 import { eq } from "drizzle-orm";
+import { hashPassword, verifyPassword } from "peta-auth";
+import { fail } from "peta-hono";
 import { db, type User, users } from "../db";
 import { api } from "../setup";
 
-const LoginBody = type({ email: "string >= 1", name: "string?" });
+const RegisterBody = type({ name: "string >= 1", email: "string.email", password: "string >= 8" });
+const LoginBody = type({ email: "string.email", password: "string >= 8" });
 const UserResponse = type({
   id: "string",
   email: "string",
@@ -11,9 +14,39 @@ const UserResponse = type({
   createdAt: "string",
 });
 
-// POST /auth/login — upsert by email, set session cookie.
-// Uses api() (not raw app.post) so it gets ArkType body validation + OpenAPI
-// docs. The `c` param exposes the Hono Context → c.var.session.save().
+function publicUser(user: User) {
+  return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };
+}
+
+// POST /auth/register — create account with name, email, password, set session.
+api(
+  {
+    method: "POST",
+    path: "/auth/register",
+    body: RegisterBody,
+    responses: { 201: UserResponse },
+    status: 201,
+    tags: ["auth"],
+    summary: "Register a new user",
+  },
+  async ({ body, c }) => {
+    const [existing] = await db.select().from(users).where(eq(users.email, body.email)).limit(1);
+    if (existing) throw fail.conflict("email already registered");
+
+    const hash = await hashPassword(body.password);
+    const [user] = await db
+      .insert(users)
+      .values({ email: body.email, name: body.name, passwordHash: hash })
+      .returning();
+
+    c.var.session.userId = user.id;
+    await c.var.session.save();
+    return publicUser(user);
+  },
+);
+
+// POST /auth/login — authenticate with email and password, set session.
+// Same 401 for unknown email and wrong password to prevent user enumeration.
 api(
   {
     method: "POST",
@@ -21,23 +54,18 @@ api(
     body: LoginBody,
     responses: { 200: UserResponse },
     tags: ["auth"],
-    summary: "Login or create user by email",
+    summary: "Login with email and password",
   },
   async ({ body, c }) => {
-    const [existing] = await db.select().from(users).where(eq(users.email, body.email)).limit(1);
+    const [user] = await db.select().from(users).where(eq(users.email, body.email)).limit(1);
+    if (!user) throw fail.unauthorized("invalid credentials");
 
-    let user: User = existing;
-    if (!user) {
-      const [created] = await db
-        .insert(users)
-        .values({ email: body.email, name: body.name ?? body.email.split("@")[0] })
-        .returning();
-      user = created;
-    }
+    const valid = await verifyPassword(user.passwordHash, body.password);
+    if (!valid) throw fail.unauthorized("invalid credentials");
 
     c.var.session.userId = user.id;
     await c.var.session.save();
-    return user;
+    return publicUser(user);
   },
 );
 
@@ -69,5 +97,5 @@ api(
     tags: ["auth"],
     summary: "Get current user",
   },
-  async ({ auth }) => auth.user,
+  async ({ auth }) => publicUser(auth.user),
 );

@@ -260,7 +260,8 @@ api(
 
 | Method | Path | Auth | Handler shape |
 |---|---|---|---|
-| POST | `/auth/login` | — | `async ({ body: { email, name? }, c })` — sets session cookie |
+| POST | `/auth/register` | — | `async ({ body: { name, email, password }, c })` — creates user, sets session cookie (201) |
+| POST | `/auth/login` | — | `async ({ body: { email, password }, c })` — verifies credentials, sets session cookie |
 | POST | `/auth/logout` | required | `async ({ c })` — destroys session, returns null (204) |
 | GET | `/me` | required | `async ({ auth })` — returns current user |
 | GET | `/posts` | — | `async ({ query: { authorId? } })` — returns array |
@@ -273,10 +274,11 @@ api(
 
 ### Auth flow
 
-1. `POST /auth/login` with `{ email }` → server creates or finds user, stores `userId` in encrypted cookie via `c.var.session.save()`. Response includes `Set-Cookie` header.
-2. All subsequent requests include the `Cookie` header → `session()` middleware decrypts and hydrates `c.var.session`.
-3. Routes with `auth: "required"` trigger the auth bridge: `c.var.session.userId` → Drizzle user lookup → `req.auth.user` (typed).
-4. `POST /auth/logout` (auth-required) calls `c.var.session.destroy()` → response sets expired cookie. Client must stop sending the old cookie.
+1. `POST /auth/register` with `{ name, email, password }` → server creates user (argon2id hash via `peta-auth`'s `hashPassword`), stores `userId` in encrypted cookie via `c.var.session.save()`. Response includes `Set-Cookie` header.
+2. `POST /auth/login` with `{ email, password }` → server looks up user by email, verifies hash with `verifyPassword`, stores `userId` in session. Same `401` for unknown email and wrong password (prevents enumeration).
+3. All subsequent requests include the `Cookie` header → `session()` middleware decrypts and hydrates `c.var.session`.
+4. Routes with `auth: "required"` trigger the auth bridge: `c.var.session.userId` → Drizzle user lookup → `req.auth.user` (typed).
+5. `POST /auth/logout` (auth-required) calls `c.var.session.destroy()` → response sets expired cookie. Client must stop sending the old cookie.
 
 ### Auth bridge implementation
 

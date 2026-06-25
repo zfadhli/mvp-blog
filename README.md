@@ -48,7 +48,8 @@ Open [http://localhost:3000/docs](http://localhost:3000/docs) for the interactiv
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/auth/login` | — | Login or auto-create user by email |
+| `POST` | `/auth/register` | — | Register a new user (name, email, password) |
+| `POST` | `/auth/login` | — | Log in with email and password |
 | `POST` | `/auth/logout` | Required | Destroy session |
 | `GET` | `/me` | Required | Get current user |
 | `GET` | `/posts` | — | List posts, optional `?authorId` filter |
@@ -61,20 +62,33 @@ Open [http://localhost:3000/docs](http://localhost:3000/docs) for the interactiv
 
 ### Request & response examples
 
-**Login or sign up:**
+**Register a new user:**
+
+```bash
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Alice", "email": "alice@test.com", "password": "secret123"}'
+```
+
+```json
+// 201 Created
+{ "id": "01J...", "email": "alice@test.com", "name": "Alice", "createdAt": "2026-06-25T..." }
+```
+
+The `Set-Cookie` header on success is required for subsequent authenticated requests.
+
+**Log in with email and password:**
 
 ```bash
 curl -X POST http://localhost:3000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "alice@test.com"}'
+  -d '{"email": "alice@test.com", "password": "secret123"}'
 ```
 
 ```json
 // 200 OK
-{ "id": "01J...", "email": "alice@test.com", "name": "alice", "createdAt": "2026-06-25T..." }
+{ "id": "01J...", "email": "alice@test.com", "name": "Alice", "createdAt": "2026-06-25T..." }
 ```
-
-The `Set-Cookie` header on success is required for subsequent authenticated requests.
 
 **Create a post (authenticated):**
 
@@ -142,11 +156,15 @@ All commands run via [Nub](https://nubjs.com), the project's TypeScript toolkit 
 
 ## Auth flow
 
-The project uses a two-layer authentication system:
+The project uses a two-layer authentication system backed by [peta-auth](https://github.com/zfadhli/peta-stack) (argon2id password hashing + encrypted cookie sessions):
 
-1. **Session middleware** (runs on every request) — [peta-auth](https://github.com/zfadhli/peta-stack) reads the encrypted `blog-session` cookie and hydrates `c.var.session`. Stateless: no server-side storage, the cookie itself holds the encrypted data.
+1. **Register** — `POST /auth/register` with `{ name, email, password }`. The password is hashed with argon2id (via `peta-auth`'s `hashPassword`), stored in the `password_hash` column. A session cookie is set on success.
 
-2. **Auth bridge** (runs per-route, opt-in) — Routes with `auth: "required"` trigger a middleware that reads `c.var.session.userId`, looks up the user in the database via Drizzle, and injects `{ user }` into the handler as `req.auth`.
+2. **Login** — `POST /auth/login` with `{ email, password }`. The server looks up the user by email, verifies the hash with `verifyPassword`, and sets a session cookie. Same `401 "invalid credentials"` for both unknown email and wrong password (no user enumeration).
+
+3. **Session middleware** (runs on every request) — reads the encrypted `blog-session` cookie and hydrates `c.var.session`. Stateless: no server-side storage, the cookie itself holds the encrypted data.
+
+4. **Auth bridge** (runs per-route, opt-in) — Routes with `auth: "required"` trigger a middleware that reads `c.var.session.userId`, looks up the user in the database via Drizzle, and injects `{ user }` into the handler as `req.auth`.
 
 ```ts
 // src/setup.ts — the auth bridge
