@@ -1,5 +1,6 @@
 {
   "root": true,
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "vcs": {
     "enabled": true,
     "clientKind": "git",
