@@ -16,6 +16,7 @@
     "format": "biome format --write .",
     "db:generate": "nubx drizzle-kit generate",
     "db:push": "nubx drizzle-kit push",
+    "seed": "nub src/db/seed.ts",
     "prepare": "lefthook install"
   },
   "dependencies": {

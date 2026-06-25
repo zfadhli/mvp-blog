@@ -106,6 +106,7 @@ nub src/index.ts
 | `format` | `biome format --write .` | Format only |
 | `db:generate` | `nubx drizzle-kit generate` | Generate migration SQL from schema changes |
 | `db:push` | `nubx drizzle-kit push` | Push schema directly to DB (dev only) |
+| `seed` | `nub src/db/seed.ts` | Seed 4 users / 12 posts / 24 comments (use `--env-file .env` to seed persistent DB) |
 
 ---
 
