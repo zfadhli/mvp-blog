@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nubjs/setup-nub@v0
+      - run: nub install
+      - run: nub run typecheck
+      - run: nub run lint
+      - run: nub run test
+      - run: nub run build

@@ -1,0 +1,39 @@
+{
+  "name": "mvp-blog",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "scripts": {
+    "dev": "nub watch src/index.ts",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "nub --test",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "db:generate": "nubx drizzle-kit generate",
+    "db:push": "nubx drizzle-kit push",
+    "prepare": "lefthook install"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1",
+    "@libsql/client": "^0.17",
+    "arktype": "^2",
+    "drizzle-orm": "^0.45",
+    "hono": "^4",
+    "peta-auth": "^0",
+    "peta-hono": "^0",
+    "ulid": "^3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2",
+    "@types/node": "latest",
+    "drizzle-kit": "^0.31",
+    "lefthook": "^2",
+    "tsdown": "^0.22",
+    "typescript": "^6"
+  }
+}
