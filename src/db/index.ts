@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { comments, posts, users } from "./schema";
 
-export const DATABASE_URL = process.env.DATABASE_URL ?? ":memory:";
+const DATABASE_URL = process.env.DATABASE_URL ?? ":memory:";
 
 const client = createClient({ url: DATABASE_URL });
 

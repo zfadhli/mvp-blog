@@ -1,7 +1,7 @@
 import { type } from "arktype";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { fail } from "peta-hono";
-import { db, type Post, posts } from "../db";
+import { db, posts } from "../db";
 import { api } from "../setup";
 
 const PostBody = type({ title: "string >= 1", content: "string >= 1" });
@@ -30,7 +30,7 @@ api(
     const rows = query.authorId
       ? await db.select().from(posts).where(eq(posts.authorId, query.authorId))
       : await db.select().from(posts);
-    return rows as Post[];
+    return rows;
   },
 );
 
@@ -51,7 +51,7 @@ api(
       .insert(posts)
       .values({ title: body.title, content: body.content, authorId: auth.user.id })
       .returning();
-    return post as Post;
+    return post;
   },
 );
 
@@ -67,7 +67,7 @@ api(
   async ({ id }) => {
     const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
     if (!post) throw fail.notFound("post not found");
-    return post as Post;
+    return post;
   },
 );
 
@@ -93,9 +93,9 @@ api(
         ...(body.title !== undefined && { title: body.title }),
         ...(body.content !== undefined && { content: body.content }),
       })
-      .where(and(eq(posts.id, id), eq(posts.authorId, auth.user.id)))
+      .where(eq(posts.id, id))
       .returning();
-    return updated as Post;
+    return updated;
   },
 );
 
@@ -105,7 +105,6 @@ api(
     method: "DELETE",
     path: "/posts/:id",
     auth: "required",
-    responses: { 204: type({}) },
     tags: ["posts"],
     summary: "Delete post",
     status: 204,
@@ -115,7 +114,7 @@ api(
     if (!post) throw fail.notFound("post not found");
     if (post.authorId !== auth.user.id) throw fail.forbidden("not the author");
 
-    await db.delete(posts).where(and(eq(posts.id, id), eq(posts.authorId, auth.user.id)));
+    await db.delete(posts).where(eq(posts.id, id));
     return null;
   },
 );

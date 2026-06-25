@@ -1,7 +1,7 @@
 import { type } from "arktype";
 import { eq } from "drizzle-orm";
 import { fail } from "peta-hono";
-import { type Comment, comments, db, posts } from "../db";
+import { comments, db, posts } from "../db";
 import { api } from "../setup";
 
 const CommentBody = type({ content: "string >= 1" });
@@ -26,7 +26,7 @@ api(
     const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
     if (!post) throw fail.notFound("post not found");
     const rows = await db.select().from(comments).where(eq(comments.postId, id));
-    return rows as Comment[];
+    return rows;
   },
 );
 
@@ -50,6 +50,6 @@ api(
       .insert(comments)
       .values({ content: body.content, postId: id, authorId: auth.user.id })
       .returning();
-    return comment as Comment;
+    return comment;
   },
 );
