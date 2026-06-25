@@ -53,6 +53,12 @@ describe("Blog API", () => {
       assert.strictEqual(first.id, second.id);
     });
 
+    it("rejects unauthenticated logout", async () => {
+      // logout is auth-required: a client with no session has nothing to log out from
+      const res = await app.request("/auth/logout", { method: "POST" });
+      assert.strictEqual(res.status, 401);
+    });
+
     it("logout destroys session", async () => {
       const { cookie } = await login();
       const res = await authed("/auth/logout", { method: "POST", cookie });
@@ -286,6 +292,8 @@ describe("Blog API", () => {
       assert.ok(spec.paths["/posts"]);
       assert.ok(spec.paths["/posts/{id}"]);
       assert.ok(spec.paths["/posts/{id}/comments"]);
+      assert.ok(spec.paths["/auth/login"], "login route is documented");
+      assert.ok(spec.paths["/auth/logout"], "logout route is documented");
     });
 
     it("serves the docs UI", async () => {
