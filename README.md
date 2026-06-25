@@ -195,7 +195,7 @@ auth("required", async (c) => {
 
 ### Production deployment
 
-For production, set these environment variables — no `.env` file is needed, the app reads from `process.env` directly:
+For production, set these environment variables — either inline or via `.env` (nub supports `--env-file .env` natively):
 
 | Variable | Required | Example |
 |----------|----------|---------|
@@ -204,8 +204,11 @@ For production, set these environment variables — no `.env` file is needed, th
 | `PORT` | No | `8080` (defaults to `3000`) |
 
 ```bash
-# Example: run with persistent storage
+# Option A: inline environment variables
 DATABASE_URL=file:./data.db SESSION_PASSWORD="$(openssl rand -base64 32)" nub src/index.ts
+
+# Option B: .env file (see .env.example)
+nub --env-file .env src/index.ts
 ```
 
 Migrations run automatically at startup — no separate migration step in production.

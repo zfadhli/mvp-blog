@@ -147,6 +147,7 @@ describe("Blog API", () => {
       const body = await res.json();
       assert.strictEqual(body.id, user.id);
       assert.strictEqual(body.email, user.email);
+      assert.strictEqual(body.passwordHash, undefined);
     });
 
     it("rejects unauthenticated /me", async () => {
