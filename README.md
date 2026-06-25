@@ -127,14 +127,16 @@ src/
     schema.ts       — Drizzle table definitions (users, posts, comments) + inferred types
     index.ts        — libsql client, drizzle instance, migration runner
   routes/
-    auth.ts         — POST /auth/login, POST /auth/logout
+    auth.ts         — POST /auth/register, POST /auth/login, POST /auth/logout
     posts.ts        — Full CRUD for posts
     comments.ts     — List and create comments
+  lib/
+    utils.ts        — Generic utilities (pick)
   setup.ts          — createApi<Auth> singleton, session middleware, auth bridge
   types.d.ts        — Hono ContextVariableMap augmentation for typed c.var.session
   index.ts          — Entry point: imports routes (side effects), docs(), serve()
 test/
-  api.test.ts       — 20 end-to-end tests using node:test + node:assert
+  api.test.ts       — 26 end-to-end tests using node:test + node:assert
 drizzle/            — Generated migration SQL files (committed)
 ```
 

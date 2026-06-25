@@ -33,14 +33,16 @@ src/
     schema.ts       — Drizzle table defs (users, posts, comments) + inferred types
     index.ts        — libsql client + drizzle instance + migrate() at import
   routes/
-    auth.ts         — POST /auth/login, POST /auth/logout
+    auth.ts         — POST /auth/register, POST /auth/login, POST /auth/logout
     posts.ts        — CRUD for posts (list, create, get, update, delete)
     comments.ts     — List/create comments on a post
+  lib/
+    utils.ts        — Generic utilities (pick)
   setup.ts          — createApi<Auth>(), session middleware, auth('required') bridge
   types.d.ts        — Hono ContextVariableMap augmentation (typed c.var.session)
   index.ts          — Bootstrap: import routes for side effects, docs(), serve()
 test/
-  api.test.ts       — 20 e2e tests via app.request()
+  api.test.ts       — 26 e2e tests via app.request()
 drizzle/            — Generated migration SQL (committed)
 .github/workflows/
   ci.yml            — CI pipeline

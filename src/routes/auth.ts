@@ -2,7 +2,8 @@ import { type } from "arktype";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "peta-auth";
 import { fail } from "peta-hono";
-import { db, type User, users } from "../db";
+import { db, users } from "../db";
+import { pick } from "../lib/utils.js";
 import { api } from "../setup";
 
 const RegisterBody = type({ name: "string >= 1", email: "string.email", password: "string >= 8" });
@@ -13,10 +14,6 @@ const UserResponse = type({
   name: "string",
   createdAt: "string",
 });
-
-function publicUser(user: User) {
-  return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };
-}
 
 // POST /auth/register — create account with name, email, password, set session.
 api(
@@ -41,7 +38,7 @@ api(
 
     c.var.session.userId = user.id;
     await c.var.session.save();
-    return publicUser(user);
+    return pick(user, ["id", "email", "name", "createdAt"] as const);
   },
 );
 
@@ -65,7 +62,7 @@ api(
 
     c.var.session.userId = user.id;
     await c.var.session.save();
-    return publicUser(user);
+    return pick(user, ["id", "email", "name", "createdAt"] as const);
   },
 );
 
@@ -97,5 +94,5 @@ api(
     tags: ["auth"],
     summary: "Get current user",
   },
-  async ({ auth }) => publicUser(auth.user),
+  async ({ auth }) => pick(auth.user, ["id", "email", "name", "createdAt"] as const),
 );
