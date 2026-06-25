@@ -13,7 +13,7 @@ const UserResponse = type({
 
 // POST /auth/login — upsert by email, set session cookie.
 // Uses api() (not raw app.post) so it gets ArkType body validation + OpenAPI
-// docs. req.c exposes the Hono Context → c.var.session.save().
+// docs. The `c` param exposes the Hono Context → c.var.session.save().
 api(
   {
     method: "POST",

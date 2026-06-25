@@ -172,6 +172,23 @@ auth("required", async (c) => {
 > [!WARNING]
 > The default `SESSION_PASSWORD` is a known string and must be overridden in production. Use a randomly generated value of at least 32 characters.
 
+### Production deployment
+
+For production, set these environment variables — no `.env` file is needed, the app reads from `process.env` directly:
+
+| Variable | Required | Example |
+|----------|----------|---------|
+| `SESSION_PASSWORD` | Yes | `openssl rand -base64 32` output (minimum 32 characters) |
+| `DATABASE_URL` | Yes | `file:./data.db` for persistent SQLite, or a remote libsql URL |
+| `PORT` | No | `8080` (defaults to `3000`) |
+
+```bash
+# Example: run with persistent storage
+DATABASE_URL=file:./data.db SESSION_PASSWORD="$(openssl rand -base64 32)" nub src/index.ts
+```
+
+Migrations run automatically at startup — no separate migration step in production.
+
 ## Development
 
 ### Writing a new endpoint
@@ -206,7 +223,7 @@ api(
 );
 ```
 
-Path params (`:id`) appear as top-level keys in the handler. The Hono Context is available as `req.c` for operations like session access.
+Path params (`:id`) appear as top-level keys in the handler. The Hono Context is available as `c` (destructured from the handler params: `async ({ c })`) for session operations like `c.var.session.save()`.
 
 ### Adding a new table
 
