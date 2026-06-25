@@ -83,6 +83,20 @@ describe("Blog API", () => {
       });
       assert.strictEqual(res.status, 400);
     });
+
+    it("returns current user from /me", async () => {
+      const { cookie, user } = await login();
+      const res = await authed("/me", { method: "GET", cookie });
+      assert.strictEqual(res.status, 200);
+      const body = await res.json();
+      assert.strictEqual(body.id, user.id);
+      assert.strictEqual(body.email, user.email);
+    });
+
+    it("rejects unauthenticated /me", async () => {
+      const res = await app.request("/me");
+      assert.strictEqual(res.status, 401);
+    });
   });
 
   describe("posts", () => {
@@ -294,6 +308,7 @@ describe("Blog API", () => {
       assert.ok(spec.paths["/posts/{id}/comments"]);
       assert.ok(spec.paths["/auth/login"], "login route is documented");
       assert.ok(spec.paths["/auth/logout"], "logout route is documented");
+      assert.ok(spec.paths["/me"], "me route is documented");
     });
 
     it("serves the docs UI", async () => {

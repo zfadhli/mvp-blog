@@ -262,6 +262,7 @@ api(
 |---|---|---|---|
 | POST | `/auth/login` | — | `async ({ body: { email, name? }, c })` — sets session cookie |
 | POST | `/auth/logout` | required | `async ({ c })` — destroys session, returns null (204) |
+| GET | `/me` | required | `async ({ auth })` — returns current user |
 | GET | `/posts` | — | `async ({ query: { authorId? } })` — returns array |
 | POST | `/posts` | required | `async ({ body: { title, content }, auth })` — returns created (201) |
 | GET | `/posts/:id` | — | `async ({ id })` — returns single post or 404 |

@@ -50,6 +50,7 @@ Open [http://localhost:3000/docs](http://localhost:3000/docs) for the interactiv
 |--------|------|------|-------------|
 | `POST` | `/auth/login` | — | Login or auto-create user by email |
 | `POST` | `/auth/logout` | Required | Destroy session |
+| `GET` | `/me` | Required | Get current user |
 | `GET` | `/posts` | — | List posts, optional `?authorId` filter |
 | `POST` | `/posts` | Required | Create a new post |
 | `GET` | `/posts/:id` | — | Get a post by ID |

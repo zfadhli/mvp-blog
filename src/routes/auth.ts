@@ -57,3 +57,17 @@ api(
     return null;
   },
 );
+
+// GET /me — returns the current authenticated user (auth required).
+// Reuses UserResponse schema from login. Auth bridge already loaded auth.user.
+api(
+  {
+    method: "GET",
+    path: "/me",
+    auth: "required",
+    responses: { 200: UserResponse },
+    tags: ["auth"],
+    summary: "Get current user",
+  },
+  async ({ auth }) => auth.user,
+);
