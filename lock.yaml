@@ -27,8 +27,8 @@ importers:
         specifier: ^0
         version: 0.3.0(hono@4.12.27)(typescript@6.0.3)
       peta-hono:
-        specifier: ^0.2.1
-        version: 0.2.1(arktype@2.2.1)(hono@4.12.27)
+        specifier: ^0.3.0
+        version: 0.3.0(arktype@2.2.1)(hono@4.12.27)
       ulid:
         specifier: ^3
         version: 3.0.2
@@ -1210,8 +1210,8 @@ packages:
       hono:
         optional: true
 
-  peta-hono@0.2.1:
-    resolution: {integrity: sha512-lz3AIiGNaJSbYUasrkSDllT7PpJmZN0bFwQAABejvNhv8s85W7NJzMbQ/z4Isv0Uz6aw9EEIxNm8FI2YYeqMJA==}
+  peta-hono@0.3.0:
+    resolution: {integrity: sha512-fOKCzSkb3hkSpdQg2VJlbo4EnL9PDIQkviEYDqag/P1+b5K+IKSUlq/E4Z23Hn7NDVPqOeg+ELNf1ArLJuwUmA==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       arktype: ^2.2.1
@@ -2154,7 +2154,7 @@ snapshots:
       iron-webcrypto: 2.0.0
       typescript: 6.0.3
 
-  peta-hono@0.2.1(arktype@2.2.1)(hono@4.12.27):
+  peta-hono@0.3.0(arktype@2.2.1)(hono@4.12.27):
     dependencies:
       '@scalar/hono-api-reference': 0.5.184(hono@4.12.27)
       arktype: 2.2.1

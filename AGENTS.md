@@ -14,7 +14,7 @@ mvp-blog is an MVP blog API — a function-based REST API on Hono + peta-hono + 
 |---|---|---|
 | Runtime | [Nub](https://nubjs.com) | TS runner, pnpm-compatible package manager, watch mode. Replaces `node`/`npm`/`npx`/`nvm`. |
 | HTTP | [Hono 4](https://hono.dev) + `@hono/node-server` | Ultralight HTTP framework |
-| API DSL | [peta-hono 0.2.1](https://github.com/zfadhli/peta-hono) | Function-based `createApi<Auth>()` → `{ api, auth, docs, app }`. ArkType schemas auto-generate OpenAPI 3.0. |
+| API DSL | [peta-hono 0.3.0](https://github.com/zfadhli/peta-hono) | Function-based `createApi<Auth>()` → `{ api, auth, docs, app }`. ArkType schemas auto-generate OpenAPI 3.0. |
 | Auth | [peta-auth/hono](https://github.com/zfadhli/peta-stack) | Encrypted stateless cookie sessions (AES-256-CBC + HMAC-SHA256). `session()` middleware globally, bridge to peta-hono `auth('required')`. |
 | Validation | [ArkType 2](https://arktype.io) | Runtime validation + JSON Schema generation. Inline schemas in route configs. |
 | ORM | [Drizzle ORM](https://orm.drizzle.team) 0.45 + `@libsql/client` 0.17 | Type-safe SQLite. Migrations via `drizzle-kit generate`. |

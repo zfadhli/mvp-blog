@@ -12,6 +12,8 @@ export type Auth = { user: User };
 export const { api, auth, docs, app } = createApi<Auth>({
   title: "Blog API",
   version: "1.0.0",
+  // ponytail: debug shows real error details in dev; omit or set NODE_ENV=production to hide
+  debug: process.env.NODE_ENV !== "production",
 });
 
 // Global encrypted-cookie session — runs before every handler so c.var.session

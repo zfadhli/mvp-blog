@@ -25,7 +25,7 @@
     "drizzle-orm": "^0.45",
     "hono": "^4",
     "peta-auth": "^0",
-    "peta-hono": "^0.2.1",
+    "peta-hono": "^0.3.0",
     "ulid": "^3"
   },
   "devDependencies": {
