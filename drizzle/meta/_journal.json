@@ -15,6 +15,13 @@
       "when": 1782368948650,
       "tag": "0001_ambiguous_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1782390961565,
+      "tag": "0002_medical_kronos",
+      "breakpoints": true
     }
   ]
 }

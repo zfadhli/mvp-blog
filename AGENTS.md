@@ -33,16 +33,18 @@ src/
     schema.ts       — Drizzle table defs (users, posts, comments) + inferred types
     index.ts        — libsql client + drizzle instance + migrate() at import
   routes/
-    auth.ts         — POST /auth/register, POST /auth/login, POST /auth/logout
+    auth.ts         — POST /auth/register, POST /auth/login, POST /auth/logout, GET /me
     posts.ts        — CRUD for posts (list, create, get, update, delete)
     comments.ts     — List/create comments on a post
+    users.ts        — PATCH /users/:id/role (admin-only role management)
   lib/
     utils.ts        — Generic utilities (pick)
-  setup.ts          — createApi<Auth>(), session middleware, auth('required') bridge
+    logger.ts       — Pino logger singleton (pino-pretty in dev, JSON in prod)
+  setup.ts          — createApi<Auth>(), session middleware, auth('required') bridge, error handler
   types.d.ts        — Hono ContextVariableMap augmentation (typed c.var.session)
   index.ts          — Bootstrap: import routes for side effects, docs(), serve()
 test/
-  api.test.ts       — 26 e2e tests via app.request()
+  api.test.ts       — 34 e2e tests via app.request()
 drizzle/            — Generated migration SQL (committed)
 .github/workflows/
   ci.yml            — CI pipeline
@@ -127,7 +129,7 @@ nub --test --test-name-pattern="posts"
 
 ### Test structure
 
-- **File:** `test/api.test.ts` (single file, 20 test cases)
+- **File:** `test/api.test.ts` (single file, 34 test cases)
 - **Framework:** `node:test` (stdlib — `describe`, `it`, `beforeEach`) + `node:assert/strict`
 - **Pattern:** All tests run against the full app via `app.request()` (Hono's built-in test helper)
 - **Database:** Shared in-memory SQLite per process. `beforeEach` truncates all tables via `db.delete()`.
@@ -268,12 +270,13 @@ api(
 | POST | `/auth/logout` | required | `async ({ c })` — destroys session, returns null (204) |
 | GET | `/me` | required | `async ({ auth })` — returns current user |
 | GET | `/posts` | — | `async ({ query: { authorId? } })` — returns array |
-| POST | `/posts` | required | `async ({ body: { title, content }, auth })` — returns created (201) |
+| POST | `/posts` | required (author+) | `async ({ body: { title, content }, auth })` — reader blocked, returns created (201) |
 | GET | `/posts/:id` | — | `async ({ id })` — returns single post or 404 |
-| PUT | `/posts/:id` | required | `async ({ id, body, auth })` — owner-only, returns updated |
-| DELETE | `/posts/:id` | required | `async ({ id, auth })` — owner-only, returns null (204) |
+| PUT | `/posts/:id` | required (owner/admin) | `async ({ id, body, auth })` — owner or admin, returns updated |
+| DELETE | `/posts/:id` | required (owner/admin) | `async ({ id, auth })` — owner or admin, returns null (204) |
 | GET | `/posts/:id/comments` | — | `async ({ id })` — returns array |
 | POST | `/posts/:id/comments` | required | `async ({ id, body, auth })` — returns created (201) |
+| PATCH | `/users/:id/role` | required (admin) | `async ({ id, body: { role }, auth })` — admin-only, returns updated user |
 
 ### Auth flow
 
@@ -282,6 +285,20 @@ api(
 3. All subsequent requests include the `Cookie` header → `session()` middleware decrypts and hydrates `c.var.session`.
 4. Routes with `auth: "required"` trigger the auth bridge: `c.var.session.userId` → Drizzle user lookup → `req.auth.user` (typed).
 5. `POST /auth/logout` (auth-required) calls `c.var.session.destroy()` → response sets expired cookie. Client must stop sending the old cookie.
+
+### RBAC (role-based access control)
+
+Three roles stored as a `role` text column on `users` (default `'reader'`):
+
+| Role | Can read | Can comment | Can create posts | Can edit/delete posts |
+|---|---|---|---|---|
+| `reader` | ✓ | ✓ | ✗ (403) | ✗ |
+| `author` | ✓ | ✓ | ✓ | own only |
+| `admin` | ✓ | ✓ | ✓ | any (bypasses ownership) |
+
+- **First registered user is `admin`**; everyone else is `reader` by default.
+- **Promotion:** `PATCH /users/:id/role` (admin-only) sets any user's role to `admin`, `author`, or `reader`.
+- **Enforcement is inline** in route handlers — `auth.user.role` checked directly, no middleware abstraction (one line per guard, used 1-2 times).
 
 ### Auth bridge implementation
 

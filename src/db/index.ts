@@ -14,5 +14,5 @@ export const db = drizzle(client, { schema: { users, posts, comments } });
 // if a long-lived worker needs lazy init, wrap in an init() guard.
 await migrate(db, { migrationsFolder: "./drizzle" });
 
-export type { Comment, Post, User } from "./schema";
+export type { Comment, Post, Role, User } from "./schema";
 export { comments, posts, users } from "./schema";

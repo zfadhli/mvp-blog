@@ -3,6 +3,7 @@ import { beforeEach, describe, it } from "node:test";
 import "../src/routes/auth.js";
 import "../src/routes/comments.js";
 import "../src/routes/posts.js";
+import "../src/routes/users.js";
 import { comments, db, posts, users } from "../src/db/index.js";
 import { app, docs } from "../src/setup.js";
 
@@ -49,6 +50,19 @@ function authed(path: string, init: RequestInit & { cookie: string }) {
 }
 
 const json = (body: unknown) => JSON.stringify(body);
+
+// Promote a user to a role via the admin endpoint.
+// `adminCookie` must be an admin's session cookie.
+async function promote(adminCookie: string, userId: string, role: "admin" | "author" | "reader") {
+  const res = await authed(`/users/${userId}/role`, {
+    method: "PATCH",
+    cookie: adminCookie,
+    headers: { "Content-Type": "application/json" },
+    body: json({ role }),
+  });
+  assert.strictEqual(res.status, 200, `promote to ${role} should return 200`);
+  return res.json();
+}
 
 describe("Blog API", () => {
   beforeEach(resetDb);
@@ -178,7 +192,8 @@ describe("Blog API", () => {
 
     it("filters posts by authorId", async () => {
       const { cookie: a, user: userA } = await register("a@x.com");
-      const { cookie: b } = await register("b@x.com");
+      const { cookie: b, user: userB } = await register("b@x.com");
+      await promote(a, userB.id, "author");
 
       await authed("/posts", {
         method: "POST",
@@ -354,6 +369,116 @@ describe("Blog API", () => {
     });
   });
 
+  describe("RBAC", () => {
+    it("first registered user is admin", async () => {
+      const { user } = await register("first@test.com");
+      assert.strictEqual(user.role, "admin");
+    });
+
+    it("second registered user is reader by default", async () => {
+      await register("first@test.com");
+      const { user } = await register("second@test.com");
+      assert.strictEqual(user.role, "reader");
+    });
+
+    it("reader cannot create posts", async () => {
+      await register("admin@test.com");
+      const { cookie } = await register("reader@test.com");
+      const res = await authed("/posts", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "x", content: "y" }),
+      });
+      assert.strictEqual(res.status, 403);
+    });
+
+    it("admin can update another user's post", async () => {
+      const { cookie: adminCookie } = await register("admin@test.com");
+      const { cookie: authorCookie, user: author } = await register("author@test.com");
+      await promote(adminCookie, author.id, "author");
+
+      const createRes = await authed("/posts", {
+        method: "POST",
+        cookie: authorCookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "Author's post", content: "x" }),
+      });
+      const { id } = await createRes.json();
+
+      const updateRes = await authed(`/posts/${id}`, {
+        method: "PUT",
+        cookie: adminCookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "Admin edited this" }),
+      });
+      assert.strictEqual(updateRes.status, 200);
+      const updated = await updateRes.json();
+      assert.strictEqual(updated.title, "Admin edited this");
+    });
+
+    it("admin can delete another user's post", async () => {
+      const { cookie: adminCookie } = await register("admin@test.com");
+      const { cookie: authorCookie, user: author } = await register("author@test.com");
+      await promote(adminCookie, author.id, "author");
+
+      const createRes = await authed("/posts", {
+        method: "POST",
+        cookie: authorCookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "Author's post", content: "x" }),
+      });
+      const { id } = await createRes.json();
+
+      const deleteRes = await authed(`/posts/${id}`, { method: "DELETE", cookie: adminCookie });
+      assert.strictEqual(deleteRes.status, 204);
+    });
+
+    it("admin can promote reader to author", async () => {
+      const { cookie: adminCookie } = await register("admin@test.com");
+      const { user: reader } = await register("reader@test.com");
+      assert.strictEqual(reader.role, "reader");
+
+      const updated = await promote(adminCookie, reader.id, "author");
+      assert.strictEqual(updated.role, "author");
+    });
+
+    it("non-admin cannot promote users", async () => {
+      await register("admin@test.com");
+      const { cookie: authorCookie, user: reader } = await register("reader@test.com");
+      const res = await authed(`/users/${reader.id}/role`, {
+        method: "PATCH",
+        cookie: authorCookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ role: "author" }),
+      });
+      assert.strictEqual(res.status, 403);
+    });
+
+    it("reader can still comment on posts", async () => {
+      const { cookie: adminCookie } = await register("admin@test.com");
+      const { cookie: authorCookie, user: author } = await register("author@test.com");
+      await promote(adminCookie, author.id, "author");
+
+      const createRes = await authed("/posts", {
+        method: "POST",
+        cookie: authorCookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "Post", content: "Content" }),
+      });
+      const { id } = await createRes.json();
+
+      const { cookie: readerCookie } = await register("reader@test.com");
+      const commentRes = await authed(`/posts/${id}/comments`, {
+        method: "POST",
+        cookie: readerCookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ content: "Nice post!" }),
+      });
+      assert.strictEqual(commentRes.status, 201);
+    });
+  });
+
   describe("OpenAPI", () => {
     it("serves the OpenAPI spec", async () => {
       const res = await app.request("/openapi.json");
@@ -367,6 +492,7 @@ describe("Blog API", () => {
       assert.ok(spec.paths["/auth/login"], "login route is documented");
       assert.ok(spec.paths["/auth/logout"], "logout route is documented");
       assert.ok(spec.paths["/me"], "me route is documented");
+      assert.ok(spec.paths["/users/{id}/role"], "user role route is documented");
     });
 
     it("serves the docs UI", async () => {

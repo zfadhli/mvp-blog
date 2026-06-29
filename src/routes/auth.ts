@@ -12,6 +12,7 @@ const UserResponse = type({
   id: "string",
   email: "string",
   name: "string",
+  role: "'admin' | 'author' | 'reader'",
   createdAt: "string",
 });
 
@@ -30,15 +31,19 @@ api(
     const [existing] = await db.select().from(users).where(eq(users.email, body.email)).limit(1);
     if (existing) throw fail.conflict("email already registered");
 
+    // First user becomes admin; everyone else is a reader (promoted by admin).
+    const [anyUser] = await db.select().from(users).limit(1);
+    const role = anyUser ? "reader" : "admin";
+
     const hash = await hashPassword(body.password);
     const [user] = await db
       .insert(users)
-      .values({ email: body.email, name: body.name, passwordHash: hash })
+      .values({ email: body.email, name: body.name, passwordHash: hash, role })
       .returning();
 
     c.var.session.userId = user.id;
     await c.var.session.save();
-    return pick(user, ["id", "email", "name", "createdAt"] as const);
+    return pick(user, ["id", "email", "name", "role", "createdAt"] as const);
   },
 );
 
@@ -62,7 +67,7 @@ api(
 
     c.var.session.userId = user.id;
     await c.var.session.save();
-    return pick(user, ["id", "email", "name", "createdAt"] as const);
+    return pick(user, ["id", "email", "name", "role", "createdAt"] as const);
   },
 );
 
@@ -94,5 +99,5 @@ api(
     tags: ["auth"],
     summary: "Get current user",
   },
-  async ({ auth }) => pick(auth.user, ["id", "email", "name", "createdAt"] as const),
+  async ({ auth }) => pick(auth.user, ["id", "email", "name", "role", "createdAt"] as const),
 );

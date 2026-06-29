@@ -47,6 +47,7 @@ api(
     status: 201,
   },
   async ({ body, auth }) => {
+    if (auth.user.role === "reader") throw fail.forbidden("author or admin role required");
     const [post] = await db
       .insert(posts)
       .values({ title: body.title, content: body.content, authorId: auth.user.id })
@@ -85,7 +86,8 @@ api(
   async ({ id, body, auth }) => {
     const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
     if (!post) throw fail.notFound("post not found");
-    if (post.authorId !== auth.user.id) throw fail.forbidden("not the author");
+    if (post.authorId !== auth.user.id && auth.user.role !== "admin")
+      throw fail.forbidden("not the author");
 
     const [updated] = await db
       .update(posts)
@@ -112,7 +114,8 @@ api(
   async ({ id, auth }) => {
     const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
     if (!post) throw fail.notFound("post not found");
-    if (post.authorId !== auth.user.id) throw fail.forbidden("not the author");
+    if (post.authorId !== auth.user.id && auth.user.role !== "admin")
+      throw fail.forbidden("not the author");
 
     await db.delete(posts).where(eq(posts.id, id));
     return null;

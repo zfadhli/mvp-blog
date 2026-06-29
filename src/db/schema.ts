@@ -10,6 +10,7 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
+  role: text("role").$type<Role>().notNull().default("reader"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(now),
 });
 
@@ -35,6 +36,7 @@ export const comments = sqliteTable("comments", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(now),
 });
 
+export type Role = "admin" | "author" | "reader";
 export type User = typeof users.$inferSelect;
 export type Post = typeof posts.$inferSelect;
 export type Comment = typeof comments.$inferSelect;

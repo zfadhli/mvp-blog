@@ -20,10 +20,10 @@ async function seed() {
   const allUsers = await db
     .insert(users)
     .values([
-      { email: "alice@test.com", name: "Alice", passwordHash },
-      { email: "bob@test.com", name: "Bob", passwordHash },
-      { email: "carol@test.com", name: "Carol", passwordHash },
-      { email: "dave@test.com", name: "Dave", passwordHash },
+      { email: "alice@test.com", name: "Alice", passwordHash, role: "admin" },
+      { email: "bob@test.com", name: "Bob", passwordHash, role: "author" },
+      { email: "carol@test.com", name: "Carol", passwordHash, role: "reader" },
+      { email: "dave@test.com", name: "Dave", passwordHash, role: "reader" },
     ])
     .returning();
   log(`  ${allUsers.length} users`);

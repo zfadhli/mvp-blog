@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import "./routes/auth.js";
 import "./routes/posts.js";
 import "./routes/comments.js";
+import "./routes/users.js";
 import { logger } from "./lib/logger.js";
 import { app, docs } from "./setup.js";
 
