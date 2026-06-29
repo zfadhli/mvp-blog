@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { ulid } from "ulid";
 
 // ponytail: createdAt as ISO string text — swap to integer epoch if index/sort perf matters
@@ -36,7 +36,28 @@ export const comments = sqliteTable("comments", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(now),
 });
 
+export const tags = sqliteTable("tags", {
+  id: text("id").primaryKey().$defaultFn(ulid),
+  name: text("name").notNull().unique(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`).$defaultFn(now),
+});
+
+export const postTags = sqliteTable(
+  "post_tags",
+  {
+    postId: text("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (table) => [primaryKey({ columns: [table.postId, table.tagId] })],
+);
+
 export type Role = "admin" | "author" | "reader";
 export type User = typeof users.$inferSelect;
 export type Post = typeof posts.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
+export type Tag = typeof tags.$inferSelect;
+export type PostTag = typeof postTags.$inferSelect;

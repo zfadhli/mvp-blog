@@ -3,15 +3,18 @@ import { beforeEach, describe, it } from "node:test";
 import "../src/routes/auth.js";
 import "../src/routes/comments.js";
 import "../src/routes/posts.js";
+import "../src/routes/tags.js";
 import "../src/routes/users.js";
-import { comments, db, posts, users } from "../src/db/index.js";
+import { comments, db, posts, postTags, tags, users } from "../src/db/index.js";
 import { app, docs } from "../src/setup.js";
 
 docs();
 
 async function resetDb() {
+  await db.delete(postTags);
   await db.delete(comments);
   await db.delete(posts);
+  await db.delete(tags);
   await db.delete(users);
 }
 
@@ -61,6 +64,18 @@ async function promote(adminCookie: string, userId: string, role: "admin" | "aut
     body: json({ role }),
   });
   assert.strictEqual(res.status, 200, `promote to ${role} should return 200`);
+  return res.json();
+}
+
+// Create a tag via an author/admin cookie. Returns the created tag.
+async function createTag(cookie: string, name: string) {
+  const res = await authed("/tags", {
+    method: "POST",
+    cookie,
+    headers: { "Content-Type": "application/json" },
+    body: json({ name }),
+  });
+  assert.strictEqual(res.status, 201, `createTag(${name}) should return 201`);
   return res.json();
 }
 
@@ -335,6 +350,230 @@ describe("Blog API", () => {
     });
   });
 
+  describe("tags", () => {
+    it("creates and lists tags", async () => {
+      const { cookie } = await register();
+      await createTag(cookie, "Hono");
+      await createTag(cookie, "Drizzle");
+
+      const res = await app.request("/tags");
+      assert.strictEqual(res.status, 200);
+      const all = await res.json();
+      assert.strictEqual(all.length, 2);
+      assert.ok(all.some((t: { name: string }) => t.name === "Hono"));
+      assert.ok(all.some((t: { name: string }) => t.name === "Drizzle"));
+    });
+
+    it("rejects duplicate tag name with 409", async () => {
+      const { cookie } = await register();
+      await createTag(cookie, "Hono");
+      const res = await authed("/tags", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ name: "Hono" }),
+      });
+      assert.strictEqual(res.status, 409);
+    });
+
+    it("reader cannot create tags", async () => {
+      await register("admin@test.com");
+      const { cookie } = await register("reader@test.com");
+      const res = await authed("/tags", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ name: "x" }),
+      });
+      assert.strictEqual(res.status, 403);
+    });
+
+    it("rejects unauthenticated tag creation", async () => {
+      const res = await app.request("/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: json({ name: "x" }),
+      });
+      assert.strictEqual(res.status, 401);
+    });
+
+    it("deletes a tag (author/admin), cascades off join", async () => {
+      const { cookie } = await register();
+      const { id: tagId } = await createTag(cookie, "Hono");
+
+      // Attach tag to a post first.
+      const createPost = await authed("/posts", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "P", content: "C", tagIds: [tagId] }),
+      });
+      await createPost.json();
+      const links = await db.select().from(postTags);
+      assert.strictEqual(links.length, 1);
+
+      const delRes = await authed(`/tags/${tagId}`, { method: "DELETE", cookie });
+      assert.strictEqual(delRes.status, 204);
+
+      const after = await db.select().from(postTags);
+      assert.strictEqual(after.length, 0, "join rows should cascade-delete with the tag");
+      const getRes = await app.request("/tags");
+      const all = await getRes.json();
+      assert.strictEqual(all.length, 0);
+    });
+
+    it("reader cannot delete tags", async () => {
+      const { cookie: adminCookie } = await register("admin@test.com");
+      const { id: tagId } = await createTag(adminCookie, "Hono");
+
+      const { cookie: readerCookie } = await register("reader@test.com");
+      const res = await authed(`/tags/${tagId}`, { method: "DELETE", cookie: readerCookie });
+      assert.strictEqual(res.status, 403);
+    });
+
+    it("returns 404 for deleting a missing tag", async () => {
+      const { cookie } = await register();
+      const res = await authed("/tags/nonexistent", { method: "DELETE", cookie });
+      assert.strictEqual(res.status, 404);
+    });
+
+    it("attaches tags on post create and returns them on detail", async () => {
+      const { cookie } = await register();
+      const { id: t1 } = await createTag(cookie, "Hono");
+      const { id: t2 } = await createTag(cookie, "Drizzle");
+
+      const createRes = await authed("/posts", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "P", content: "C", tagIds: [t1, t2] }),
+      });
+      assert.strictEqual(createRes.status, 201);
+      const created = await createRes.json();
+      assert.strictEqual(created.tags.length, 2);
+      assert.ok(created.tags.some((t: { name: string }) => t.name === "Hono"));
+
+      const getRes = await app.request(`/posts/${created.id}`);
+      const fetched = await getRes.json();
+      assert.strictEqual(fetched.tags.length, 2);
+    });
+
+    it("resyncs tags on post update", async () => {
+      const { cookie } = await register();
+      const { id: t1 } = await createTag(cookie, "Hono");
+      const { id: t2 } = await createTag(cookie, "Drizzle");
+
+      const createRes = await authed("/posts", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "P", content: "C", tagIds: [t1] }),
+      });
+      const { id } = await createRes.json();
+
+      // Replace t1 with t2.
+      const updateRes = await authed(`/posts/${id}`, {
+        method: "PUT",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ tagIds: [t2] }),
+      });
+      assert.strictEqual(updateRes.status, 200);
+      const updated = await updateRes.json();
+      assert.strictEqual(updated.tags.length, 1);
+      assert.strictEqual(updated.tags[0].name, "Drizzle");
+
+      // Empty array clears all tags.
+      const clearRes = await authed(`/posts/${id}`, {
+        method: "PUT",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ tagIds: [] }),
+      });
+      const cleared = await clearRes.json();
+      assert.strictEqual(cleared.tags.length, 0);
+    });
+
+    it("rejects unknown tagId on post create with 400", async () => {
+      const { cookie } = await register();
+      const res = await authed("/posts", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "P", content: "C", tagIds: ["nope"] }),
+      });
+      assert.strictEqual(res.status, 400);
+    });
+
+    it("rejects unknown tagId on post update with 400", async () => {
+      const { cookie } = await register();
+      const createRes = await authed("/posts", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "P", content: "C" }),
+      });
+      const { id } = await createRes.json();
+
+      const res = await authed(`/posts/${id}`, {
+        method: "PUT",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ tagIds: ["nope"] }),
+      });
+      assert.strictEqual(res.status, 400);
+    });
+
+    it("filters posts by tag name", async () => {
+      const { cookie } = await register();
+      const { id: taggedId } = await createTag(cookie, "Hono");
+      await createTag(cookie, "Drizzle");
+
+      await authed("/posts", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "Tagged", content: "C", tagIds: [taggedId] }),
+      });
+      await authed("/posts", {
+        method: "POST",
+        cookie,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "Untagged", content: "C" }),
+      });
+
+      const res = await app.request("/posts?tag=Hono");
+      assert.strictEqual(res.status, 200);
+      const filtered = await res.json();
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].title, "Tagged");
+    });
+
+    it("combines authorId and tag filters", async () => {
+      const { cookie: a, user: userA } = await register("a@x.com");
+      const { cookie: b } = await register("b@x.com");
+      const { id: tagId } = await createTag(a, "Hono");
+
+      await authed("/posts", {
+        method: "POST",
+        cookie: a,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "A-tagged", content: "C", tagIds: [tagId] }),
+      });
+      await authed("/posts", {
+        method: "POST",
+        cookie: b,
+        headers: { "Content-Type": "application/json" },
+        body: json({ title: "B-tagged", content: "C", tagIds: [tagId] }),
+      });
+
+      const res = await app.request(`/posts?tag=Hono&authorId=${userA.id}`);
+      const filtered = await res.json();
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].title, "A-tagged");
+    });
+  });
+
   describe("auth guards", () => {
     it("rejects unauthenticated post creation", async () => {
       const res = await app.request("/posts", {
@@ -493,6 +732,8 @@ describe("Blog API", () => {
       assert.ok(spec.paths["/auth/logout"], "logout route is documented");
       assert.ok(spec.paths["/me"], "me route is documented");
       assert.ok(spec.paths["/users/{id}/role"], "user role route is documented");
+      assert.ok(spec.paths["/tags"], "tags list route is documented");
+      assert.ok(spec.paths["/tags/{id}"], "tag delete route is documented");
     });
 
     it("serves the docs UI", async () => {

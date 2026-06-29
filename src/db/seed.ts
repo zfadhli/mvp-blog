@@ -1,6 +1,6 @@
 import { hashPassword } from "peta-auth";
 import { db } from "./index";
-import { comments, posts, users } from "./schema";
+import { comments, posts, postTags, tags, users } from "./schema";
 
 // ponytail: console.log is fine for a one-shot dev tool — Pino's worker-thread
 // lifecycle is overkill for a script that prints once and exits.
@@ -10,8 +10,10 @@ async function seed() {
   log("Seeding database...");
 
   // Truncate in cascade-safe order (children before parents).
+  await db.delete(postTags);
   await db.delete(comments);
   await db.delete(posts);
+  await db.delete(tags);
   await db.delete(users);
 
   // ── Users ──────────────────────────────────────────────────────────
@@ -263,7 +265,52 @@ async function seed() {
     .returning();
   log(`  ${allComments.length} comments`);
 
-  log(`Seeded: ${allUsers.length} users, ${allPosts.length} posts, ${allComments.length} comments`);
+  // ── Tags + post attachments ────────────────────────────────────────
+  const allTags = await db
+    .insert(tags)
+    .values([
+      { name: "Hono" },
+      { name: "ArkType" },
+      { name: "Drizzle" },
+      { name: "SQLite" },
+      { name: "Auth" },
+      { name: "Design" },
+      { name: "MVP" },
+      { name: "TypeScript" },
+      { name: "Testing" },
+      { name: "ULID" },
+    ])
+    .returning();
+  log(`  ${allTags.length} tags`);
+
+  const byName = Object.fromEntries(allTags.map((tag) => [tag.name, tag.id]));
+  // Attach 1-3 tags per post, by post index (deterministic, no random seed).
+  const attachments = [
+    ["Hono"],
+    ["ArkType", "TypeScript"],
+    ["Drizzle"],
+    ["SQLite"],
+    ["Auth"],
+    ["Design"],
+    ["MVP"],
+    ["TypeScript"],
+    ["Testing"],
+    ["ULID"],
+    ["Drizzle", "Testing"],
+    ["MVP", "Design"],
+  ];
+  await db
+    .insert(postTags)
+    .values(
+      attachments.flatMap((names, index) =>
+        names.map((name) => ({ postId: allPosts[index].id, tagId: byName[name] })),
+      ),
+    );
+  log(`  ${attachments.reduce((n, names) => n + names.length, 0)} post-tag links`);
+
+  log(
+    `Seeded: ${allUsers.length} users, ${allPosts.length} posts, ${allComments.length} comments, ${allTags.length} tags`,
+  );
 }
 
 seed().catch((err) => {
